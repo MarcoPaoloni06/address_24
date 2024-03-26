@@ -1,57 +1,170 @@
-// Importazione delle dipendenze necessarie
-import 'package:address_24/models/person.dart'; // Importa il modello 'Person'
-import 'package:address_24/services/people_service.dart'; // Importa il servizio 'PeopleService'
-import 'package:flutter/material.dart'; // Importa il framework Flutter
+import 'package:address_24/models/person.dart';
+import 'package:address_24/services/people_service.dart';
+import 'package:address_24/services/services.dart';
+import 'package:address_24/widgets/like_button.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 
 import 'screens/home_screen.dart';
-import 'widgets/contact_item.dart'; // Importa i widget di base di Flutter
+import 'widgets/contact_list_item.dart';
 
-//le callback sono funzioni che vengono passate come argomenti ad altre funzioni o ad altri oggetti
-
-// Funzione principale che avvia l'applicazione
 void main() {
   runApp(MaterialApp(
     debugShowCheckedModeBanner: false,
-    home: SafeArea(
-      child: HomeListViewScreen(),
-    ),
+    home: SafeArea(child: HomeListViewScreen()),
   ));
 }
 
-class HomeListViewScreen extends StatelessWidget {
+class HomeListViewScreen extends StatefulWidget {
   HomeListViewScreen({super.key});
 
-  final people = PeopleService().getPeople(results: 100).toList();
+  @override
+  State<HomeListViewScreen> createState() => _HomeListViewScreenState();
+}
 
-  ListTile _buildListTitle(Person p) {
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundImage: NetworkImage(p.picture!.thumbnail!),
-      ),
-      title: Text(p.firstName!),
-      subtitle: Text(p.cell!),
-      trailing: Icon(Icons.favorite_border),
-    );
-  }
+class _HomeListViewScreenState extends State<HomeListViewScreen> {
+  final people = PeopleService()
+      .getPeople(results: 100)
+      .where((e) => e.id != null)
+      .toList();
+
+  List<Person> _favoritePeople = [];
+  final _favorite = [];
+
+  int _currentIndex = 0;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       bottomNavigationBar: BottomNavigationBar(
-        elevation: 0,
-        selectedItemColor: Colors.amber,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.list),label: "List"),
-          BottomNavigationBarItem(icon: Icon(Icons.favorite_outline),label: "Favorite")
-        ],
-      ),
-      body: ListView.builder(
+          onTap: (index) {
+            setState(() {
+              _currentIndex = index;
+            });
+          },
+          currentIndex: _currentIndex,
+          selectedItemColor: Colors.green,
+          items: const [
+            BottomNavigationBarItem(
+                icon: Icon(Icons.list_rounded), label: "List"),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.favorite_rounded), label: "Favorite")
+          ]),
+      body: _currentIndex == 0
+          ? ContactListView(
+              people: people,
+              onTileTapped: (p) {},
+              onPressed: (p) {
+                setState(() {
+                  if (_favorite.contains(p.id)) {
+                    _favorite.remove(p.id);
+                    return;
+                  }
+
+                  _favorite.add(p.id);
+                  _favoritePeople =
+                      people.where((e) => _favorite.contains(e.id)).toList();
+                });
+              },
+              isFavorite: (id) {
+                return _favorite.contains(id);
+              })
+          : ContactListView(
+              people: _favoritePeople,
+              onTileTapped: (p) {
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (context) {
+                    return PersonDetailsScreen(person: p);
+                  },
+                ));
+              },
+              onPressed: (p) {
+                setState(() {
+                  if (_favorite.contains(p.id)) {
+                    _favorite.remove(p.id);
+                    return;
+                  }
+
+                  _favorite.add(p.id);
+                  _favoritePeople =
+                      people.where((e) => _favorite.contains(e.id)).toList();
+                });
+              },
+              isFavorite: (id) {
+                return _favorite.contains(id);
+              }),
+    );
+  }
+}
+
+class ContactListView extends StatelessWidget {
+  const ContactListView({
+    super.key,
+    required this.people,
+    required this.onPressed,
+    required this.isFavorite,
+    required this.onTileTapped,
+  });
+
+  final void Function(Person p) onPressed;
+  final bool Function(String? id) isFavorite;
+  final void Function(Person p) onTileTapped;
+
+  final List<Person> people;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
         itemCount: people.length,
         itemBuilder: (context, index) {
-          return _buildListTitle(people[index]);
-        },
-      )
+          final p = people[index];
+          return ContactListItem(
+              p: p,
+              onTap: () => onTileTapped(p),
+              trailing: LikeButton(
+                  favorite: isFavorite(p.id), onPressed: () => onPressed(p)));
+        });
+  }
+}
+
+class PersonDetailsScreen extends StatefulWidget {
+  const PersonDetailsScreen({
+    super.key,
+    required this.person,
+  });
+
+  final Person person;
+
+  @override
+  State<PersonDetailsScreen> createState() => _PersonDetailsScreenState();
+}
+
+class _PersonDetailsScreenState extends State<PersonDetailsScreen> {
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(widget.person.firstName!),
+        ),
+        body: Column(
+          children: [
+            Hero(
+              tag: widget.person.id!,
+              child: Image.network(
+                widget.person.picture!.large!,
+              ),
+            ),
+            Center(
+              child: Text(
+                widget.person.email!,
+                style: TextStyle(fontSize: 42),
+              ),
+            )
+          ],
+        ),
+      ),
     );
   }
 }
